@@ -23,7 +23,9 @@ This repository provides a python-based example that will split the targeted fol
 
    
 
-4. Then run bd-splitter.py 
+4. Create .restconfig.json file with the required BD URL, BD user API token.
+
+3. Then run bd-splitter.py 
 
    ```
    python3 bd-splitter.py https://bd-server-fqdn api-token project-name version-name target-dir
