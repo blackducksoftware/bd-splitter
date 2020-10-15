@@ -87,6 +87,12 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=True)
     else:
         logging.debug(f"folder {root_path} with size {my_size} is under limit of {args.size_limit}")
 
+if scan_dirs == {}:
+    # This means all of the directories analyzed fit within the given size limit
+    # In this case we setup to run a Detect scan on the originally supplied target directory
+    logging.debug(f"All of the folders within {target_dir} fit under the size limit of {args.size_limit} so adding {target_dir} to the scan directory list")
+    scan_dirs[target_dir] = {"exclude_folders": []}
+
 logging.debug(f"scan_dirs: {scan_dirs}")
 
 hub_instance_kwargs = {
