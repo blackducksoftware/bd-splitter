@@ -33,12 +33,21 @@ parser.add_argument("-i", "--ignore_list", default=default_ignore_list_str, help
 parser.add_argument("-l", "--logging_dir", help="Set the directory where Detect log files will be captured (default: current working directory)")
 parser.add_argument("-s", "--size_limit", default=FIVE_GB, type=int, help="Set the size limit at which (signature) scans should be split (default: 5 GB)")
 parser.add_argument("-w", "--wait", action='store_true', help="Wait for all the scan processing to complete")
+parser.add_argument("-p", "--detect_properties", help="Provide list of (additional) detect properties (one per line) in the specified file")
 args = parser.parse_args()
 
 logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s', stream=sys.stderr, level=logging.DEBUG)
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
+if args.detect_properties:
+    logging.debug(f"Reading additional detect properties from {args.detect_properties}")
+    with open(args.detect_properties, 'r') as detect_properties_f:
+        additional_detect_properties = detect_properties_f.readlines()
+        additional_detect_properties = [p.strip() for p in additional_detect_properties]
+else:
+    additional_detect_properties = []
+logging.debug(f"additional detect properties: {additional_detect_properties}")
 
 target_dir = Path(args.target_dir)
 logging.debug(f"target_dir: {target_dir}")
@@ -126,6 +135,7 @@ for code_location in code_locations:
 # Run Synopsys Detect and collect the results
 #
 base_command = f"{DETECT_CMD} --blackduck.url={args.bd_url} --blackduck.api.token={args.api_token} --blackduck.trust.cert=true --detect.parallel.processors=-1 --detect.project.name={args.project} --detect.project.version.name={args.version}"
+base_command = f"{base_command} {' '.join(additional_detect_properties)}"
 logging.debug(f"base command: {base_command}")
 
 code_locations_to_wait_for = []
