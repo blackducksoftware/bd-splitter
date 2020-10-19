@@ -1,0 +1,2 @@
+--detect.blackduck.signature.scanner.copyright.search=true
+--detect.blackduck.signature.scanner.license.search=true
