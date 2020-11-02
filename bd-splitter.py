@@ -68,7 +68,14 @@ scan_dirs = {}
 
 for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=True):
     root_path = Path(root)
-    size = sum(getsize(root_path / name) for name in files)
+    # size = sum(getsize(root_path / name) for name in files)
+    size = 0
+    for name in files:
+        try:
+            size += getsize(root_path / name)
+        except FileNotFoundError:
+            continue
+            
     if size > args.size_limit:
         logging.error(f"This folder - {root} - has files totalling {size} bytes which is greater than the limit of {args.size_limit}. We cannot split this folder any further and therefore cannot scan it. Exiting...")
         sys.exit(1)

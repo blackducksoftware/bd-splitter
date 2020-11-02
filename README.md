@@ -31,3 +31,8 @@ This repository provides a python-based example that will split the targeted fol
    python3 bd-splitter.py https://bd-server-fqdn api-token project-name version-name target-dir
    ```
 
+# Release Log
+
+- Nov 2, 2020
+  - Tag/version 1.0.1
+    - Add try/except to overcome FileNotFoundError resulting from symbolic link to a file that no longer exists
