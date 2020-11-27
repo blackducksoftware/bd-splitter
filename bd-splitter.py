@@ -16,7 +16,7 @@ from blackduck.HubRestApi import HubInstance, object_id
 
 from wait_for_scan_results import ScanMonitor
 
-SYNOPSYS_DETECT_PATH=os.environ.get("SYNOPSYS_DETECT_PATH", "/Users/gsnyder/synopsys-detect/download/synopsys-detect-6.5.0.jar")
+SYNOPSYS_DETECT_PATH=os.environ.get("SYNOPSYS_DETECT_PATH", "./synopsys-detect-6.5.0.jar")
 DETECT_CMD=f"java -jar {SYNOPSYS_DETECT_PATH}"
 FIVE_GB = 5 * 1024 * 1024 * 1024
 
@@ -33,6 +33,9 @@ parser.add_argument("-i", "--ignore_list", default=default_ignore_list_str, help
 parser.add_argument("-l", "--logging_dir", help="Set the directory where Detect log files will be captured (default: current working directory)")
 parser.add_argument("-s", "--size_limit", default=FIVE_GB, type=int, help="Set the size limit at which (signature) scans should be split (default: 5 GB)")
 parser.add_argument("-w", "--wait", action='store_true', help="Wait for all the scan processing to complete")
+parser.add_argument("-c", "--max_checks", default=240, type=int, help="When waiting for scan processing how many times to check before timing out (default: 240 for 20 minutes)")
+parser.add_argument("-d", "--check_delay", default=5, type=int, help="When waiting for scan processing how long to wait before checking again (default: 5 seconds)")
+parser.add_argument("-sn", "--snippet_scan", action='store_true', help="When waiting for scan processing does the scan include snippet scanning?  Note you still need to specify the Detect Properties to enable snippet scanning (default: False)")
 parser.add_argument("-p", "--detect_properties", help="Provide list of (additional) detect properties (one per line) in the specified file")
 args = parser.parse_args()
 
@@ -126,17 +129,27 @@ hub = HubInstance(args.bd_url, **hub_instance_kwargs) # Need a HubInstance to us
 #
 version = hub.get_or_create_project_version(args.project, args.version)
 code_locations_url = hub.get_link(version, "codelocations")
-code_locations = hub.execute_get(code_locations_url).json().get('items', [])
-logging.debug(f"Un-mapping code locations: {[c['name'] for c in code_locations]}")
-for code_location in code_locations:
-    logging.debug(f"Unmapping code location {code_location['name']}")
-    code_location['mappedProjectVersion'] = ""
-    response = hub.execute_put(code_location['_meta']['href'], code_location)
-    if response.status_code == 200:
-        logging.debug(f"Successfully unmapped code location {code_location['name']}")
-        code_location_after = hub.execute_get(code_location['_meta']['href'])
-    else:
-        logging.warning(f"Failed to unmap code location {code_location['name']}, status code was {response.status_code}")
+code_locations_count = 1
+while code_locations_count > 0:
+    code_locations = hub.execute_get(code_locations_url).json().get('items', [])
+    logging.debug(f"Un-mapping code locations: {[c['name'] for c in code_locations]}")
+
+    code_locations_count = len(code_locations)
+    logging.debug(f"Code locations count {code_locations_count}")
+
+    for code_location in code_locations:
+        logging.debug(f"Unmapping code location {code_location['name']}")
+        code_location['mappedProjectVersion'] = ""
+        response = hub.execute_put(code_location['_meta']['href'], code_location)
+        if response.status_code == 200:
+            logging.debug(f"Successfully unmapped code location {code_location['name']}")
+            code_location_after = hub.execute_get(code_location['_meta']['href'])
+        else:
+            logging.warning(f"Failed to unmap code location {code_location['name']}, status code was {response.status_code}")
+    
+    if code_locations_count < 10:
+        code_locations_count = 0
+    
 
 #
 # Run Synopsys Detect and collect the results
@@ -177,7 +190,7 @@ for scan_dir, scan_dir_options in scan_dirs.items():
 if args.wait:
     for code_location in code_locations_to_wait_for:
         logging.debug(f"Waiting for code location {code_location} to finish processing using start_time {start_time}")
-        scan_monitor = ScanMonitor(hub, code_location, start_time=start_time)
+        scan_monitor = ScanMonitor(hub, code_location, max_checks=args.max_checks, check_delay=args.check_delay, start_time=start_time, snippet_scan=args.snippet_scan)
         scan_status = scan_monitor.wait_for_scan_completion()
         logging.debug(f"Code location {code_location} finished with status = {scan_status}")
 
