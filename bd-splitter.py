@@ -20,16 +20,13 @@ SYNOPSYS_DETECT_PATH=os.environ.get("SYNOPSYS_DETECT_PATH", "./synopsys-detect-6
 DETECT_CMD=f"java -jar {SYNOPSYS_DETECT_PATH}"
 FIVE_GB = 5 * 1024 * 1024 * 1024
 
-default_ignore_list = ['.git']
-default_ignore_list_str = ",".join(default_ignore_list)
-
 parser = argparse.ArgumentParser("Analyze a given folder and generate one or more Synopsys Detect commands to perform SCA on the folder's contents")
 parser.add_argument("bd_url", help="The Black Duck server URL, e.g. https://domain-name")
 parser.add_argument("api_token", help="The Black Duck user API token")
 parser.add_argument("project", help="The project name to map all the scans to")
 parser.add_argument("version", help="The version name to map all the scans to")
 parser.add_argument("target_dir")
-parser.add_argument("-i", "--ignore_list", default=default_ignore_list_str, help=f"Comma separated list of directory names which should be ignored (default: {default_ignore_list_str})")
+parser.add_argument("-e", "--exclude_directory", action='append', help="Add a directory to the exclude list.")
 parser.add_argument("-l", "--logging_dir", help="Set the directory where Detect log files will be captured (default: current working directory)")
 parser.add_argument("-s", "--size_limit", default=FIVE_GB, type=int, help="Set the size limit at which (signature) scans should be split (default: 5 GB)")
 parser.add_argument("-w", "--wait", action='store_true', help="Wait for all the scan processing to complete")
@@ -56,10 +53,16 @@ target_dir = Path(args.target_dir)
 logging.debug(f"target_dir: {target_dir}")
 assert os.path.isdir(target_dir), f"Target directory {target_dir} not found or does not appear to be a directory"
 
-ignore_list = args.ignore_list.split(",")
+# TODO: Pass these through into Detect's --detect.blackduck.signature.scanner.exclusion.name.patterns option?
+exclude_list = args.exclude_directory if args.exclude_directory else []
+logging.debug(f"Excluding the following directory names/patterns: {exclude_list}")
 
 directories = {}
 scan_dirs = {}
+
+def in_exclude_list(abs_path):
+    return any([abs_path.match(e) for e in exclude_list])
+
 
 #
 # Analyze the folder tree from the bottom up
@@ -69,9 +72,17 @@ scan_dirs = {}
 # Add the folder itself to the list, but exclude its sub-folders
 #
 
+exclude_folders = set()
+
 for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=True):
-    root_path = Path(root)
-    # size = sum(getsize(root_path / name) for name in files)
+    root_path = Path(root).absolute()
+
+    if in_exclude_list(root_path):
+        exclude_folders.add(root_path)
+
+    # TODO: if the directory we are "in" is within an excluded folder, we need to not
+    # count it towards the total size?
+
     size = 0
     for name in files:
         try:
@@ -82,29 +93,30 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=True)
     if size > args.size_limit:
         logging.error(f"This folder - {root} - has files totalling {size} bytes which is greater than the limit of {args.size_limit}. We cannot split this folder any further and therefore cannot scan it. Exiting...")
         sys.exit(1)
-    subdir_paths = [Path(root) / Path(d) for d in subdirs]
+
+    subdir_paths = [ root_path / d for d in subdirs]
     logging.debug(f"subdir_paths: {subdir_paths}")
+
     subdir_size = sum(directories[p] for p in subdir_paths)
     my_size = directories[root_path] = size + subdir_size
+
     if my_size > args.size_limit:
-        logging.debug(f"folder {root_path} with size {my_size} is over limit of {args.size_limit} so will scan subdirs ({subdirs}) separately")
-        for subdir in subdirs:
-            subdir_abs_path = root_path / subdir
-            if subdir_abs_path in scan_dirs.keys():
-                logging.debug(f"subdir {subdir_abs_path} already in list of scan_dirs, skipping...")
-            elif subdir not in ignore_list:
-                logging.debug(f"adding {subdir_abs_path} to scan_dirs")
-                scan_dirs[subdir_abs_path] = {"exclude_folders": []}
+        logging.debug(f"Splitting {root_path} cause it is {my_size} bytes which is > {args.size_limit}")
+        # import pdb; pdb.set_trace()
+        for subdir in subdir_paths:
+            # TODO: Need to pop folders from the exclude list as we deal with them. How?
+            if subdir not in scan_dirs and subdir not in exclude_folders:
+                logging.debug(f"adding subdir {subdir} to list of directories to scan")
+                exclude_folders_under_subdir = [f for f in exclude_folders if f.is_relative_to(subdir)]
+                scan_dirs[subdir] = {"exclude_folders": exclude_folders_under_subdir}
+                exclude_folders -= set(exclude_folders_under_subdir)
             else:
-                logging.debug(f"{subdir} subdir in  ignore_list {ignore_list} is {subdir in ignore_list}, so not adding {subdir_abs_path} to scan_dirs")
-        assert root_path not in scan_dirs.keys(), f"Root {root_path} was already in scan_dirs"
-        if root_path.name not in ignore_list:
-            scan_dirs[root_path] = {"exclude_folders": [Path(s) for s in subdirs]}
-            logging.debug(f"Adding {root_path} to scan_dirs with exclude folders = {subdirs}")
-        else:
-            logging.debug(f"Not adding {root_path} to scan_dirs cause it is in the ignore list")
+                logging.debug(f"subdir {subdir} is already in list of directories to scan or was in the exclude folder list, skipping")
+        scan_dirs[root_path] = {"exclude_folders": subdir_paths}
     else:
         logging.debug(f"folder {root_path} with size {my_size} is under limit of {args.size_limit}")
+
+# import pdb; pdb.set_trace()
 
 if scan_dirs == {}:
     # This means all of the directories analyzed fit within the given size limit
@@ -163,10 +175,15 @@ start_time = arrow.utcnow()
 
 for scan_dir, scan_dir_options in scan_dirs.items():
     exclude_folders = scan_dir_options['exclude_folders']
+    exclude_folders = [e.relative_to(scan_dir) for e in exclude_folders]
+    # import pdb; pdb.set_trace()
     code_location = f"{scan_dir}-{args.project}-{args.version}".replace("/", "-").replace("\\", "-")
     command = f"{base_command} --detect.source.path={scan_dir} --detect.code.location.name={code_location}"
     if exclude_folders:
-        exclusion_name_patterns = ",".join([f"/{f}/" for f in scan_dir_options['exclude_folders']])
+        # TODO: Is this the correct detect / signature scan option to use to exclude the folders?
+        # TODO: Function to adjust the path information used in the detect exclusion option given the
+        #   source.path (aka scan_dir) and the exclude_folders
+        exclusion_name_patterns = ",".join([f"/{f}/" for f in exclude_folders])
         command = f"{command} --detect.blackduck.signature.scanner.exclusion.patterns={exclusion_name_patterns}"
 
     logging.debug(f"Running Synopsys detect on {scan_dir} using scan/code location name = {code_location}")
