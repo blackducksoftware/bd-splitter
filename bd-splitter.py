@@ -27,6 +27,7 @@ parser.add_argument("project", help="The project name to map all the scans to")
 parser.add_argument("version", help="The version name to map all the scans to")
 parser.add_argument("target_dir")
 parser.add_argument("-e", "--exclude_directory", action='append', help="Add a directory to the exclude list.")
+parser.add_argument("-dfs", "--dont_follow_symlinks", action='store_true')
 parser.add_argument("-l", "--logging_dir", help="Set the directory where Detect log files will be captured (default: current working directory)")
 parser.add_argument("-s", "--size_limit", default=FIVE_GB, type=int, help="Set the size limit at which (signature) scans should be split (default: 5 GB)")
 parser.add_argument("-w", "--wait", action='store_true', help="Wait for all the scan processing to complete")
@@ -73,8 +74,12 @@ def in_exclude_list(abs_path):
 #
 
 exclude_folders = set()
+follow_symlinks = not args.dont_follow_synlinks
+logging.debug(f"Following symlinks: {follow_symlinks}")
 
-for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=True):
+no_splits = True
+
+for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=follow_symlinks):
     root_path = Path(root).absolute()
 
     if in_exclude_list(root_path):
@@ -97,10 +102,11 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=True)
     subdir_paths = [ root_path / d for d in subdirs]
     logging.debug(f"subdir_paths: {subdir_paths}")
 
-    subdir_size = sum(directories[p] for p in subdir_paths)
+    subdir_size = sum(directories.get(p, 0) for p in subdir_paths)
     my_size = directories[root_path] = size + subdir_size
 
     if my_size > args.size_limit:
+        no_splits = False
         logging.debug(f"Splitting {root_path} cause it is {my_size} bytes which is > {args.size_limit}")
         # import pdb; pdb.set_trace()
         for subdir in subdir_paths:
@@ -115,14 +121,15 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=True)
         scan_dirs[root_path] = {"exclude_folders": subdir_paths}
     else:
         logging.debug(f"folder {root_path} with size {my_size} is under limit of {args.size_limit}")
+        if root_path.is_symlink() and root_path.resolve() not in scan_dirs:
+            logging.debug(f"Adding {root_path} symlink which points to {root_path.resolve()} to list of directories to scan")
+            scan_dirs[root_path.resolve()] = {'exclude_folders': []}
 
-# import pdb; pdb.set_trace()
-
-if scan_dirs == {}:
+if no_splits:
     # This means all of the directories analyzed fit within the given size limit
     # In this case we setup to run a Detect scan on the originally supplied target directory
     logging.debug(f"All of the folders within {target_dir} fit under the size limit of {args.size_limit} so adding {target_dir} to the scan directory list")
-    scan_dirs[target_dir] = {"exclude_folders": []}
+    scan_dirs[target_dir] = {"exclude_folders": exclude_folders}
 
 logging.debug(f"scan_dirs: {scan_dirs}")
 
@@ -176,8 +183,7 @@ start_time = arrow.utcnow()
 for scan_dir, scan_dir_options in scan_dirs.items():
     exclude_folders = scan_dir_options['exclude_folders']
     exclude_folders = [e.relative_to(scan_dir) for e in exclude_folders]
-    # import pdb; pdb.set_trace()
-    code_location = f"{scan_dir}-{args.project}-{args.version}".replace("/", "-").replace("\\", "-")
+    code_location = f"{args.project}-{args.version}-{scan_dir}".replace("/", "-").replace("\\", "-")
     command = f"{base_command} --detect.source.path={scan_dir} --detect.code.location.name={code_location}"
     if exclude_folders:
         # TODO: Is this the correct detect / signature scan option to use to exclude the folders?
