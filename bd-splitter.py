@@ -74,7 +74,7 @@ def in_exclude_list(abs_path):
 #
 
 exclude_folders = set()
-follow_symlinks = not args.dont_follow_synlinks
+follow_symlinks = not args.dont_follow_symlinks
 logging.debug(f"Following symlinks: {follow_symlinks}")
 
 no_splits = True
@@ -83,6 +83,7 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=follo
     root_path = Path(root).absolute()
 
     if in_exclude_list(root_path):
+        logging.debug(f"Adding {root_path} to the exclude folder list")
         exclude_folders.add(root_path)
 
     # TODO: if the directory we are "in" is within an excluded folder, we need to not
@@ -113,7 +114,18 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=follo
             # TODO: Need to pop folders from the exclude list as we deal with them. How?
             if subdir not in scan_dirs and subdir not in exclude_folders:
                 logging.debug(f"adding subdir {subdir} to list of directories to scan")
-                exclude_folders_under_subdir = [f for f in exclude_folders if f.is_relative_to(subdir)]
+                exclude_folders_under_subdir = list()
+                for f in exclude_folders:
+                    try:
+                        f.relative_to(subdir)
+                    except ValueError:
+                        logging.debug(f"folder {f} is not a sub-dir of {subdir}")
+                        continue
+                    else:
+                        logging.debug(f"folder {f} is a sub-dir of {subdir} so will exclude it from detect scan of {subdir}")
+                        exclude_folders_under_subdir.append(f)
+                # exclude_folders_under_subdir = [f for f in exclude_folders if f.is_relative_to(subdir)]
+                logging.debug(f"excluding dirs {exclude_folders_under_subdir} from subdir {subdir} analysis")
                 scan_dirs[subdir] = {"exclude_folders": exclude_folders_under_subdir}
                 exclude_folders -= set(exclude_folders_under_subdir)
             else:
