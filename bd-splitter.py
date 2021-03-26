@@ -114,17 +114,7 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=follo
             # TODO: Need to pop folders from the exclude list as we deal with them. How?
             if subdir not in scan_dirs and subdir not in exclude_folders:
                 logging.debug(f"adding subdir {subdir} to list of directories to scan")
-                exclude_folders_under_subdir = list()
-                for f in exclude_folders:
-                    try:
-                        f.relative_to(subdir)
-                    except ValueError:
-                        logging.debug(f"folder {f} is not a sub-dir of {subdir}")
-                        continue
-                    else:
-                        logging.debug(f"folder {f} is a sub-dir of {subdir} so will exclude it from detect scan of {subdir}")
-                        exclude_folders_under_subdir.append(f)
-                # exclude_folders_under_subdir = [f for f in exclude_folders if f.is_relative_to(subdir)]
+                exclude_folders_under_subdir = [f for f in exclude_folders if f.is_relative_to(subdir)]
                 logging.debug(f"excluding dirs {exclude_folders_under_subdir} from subdir {subdir} analysis")
                 scan_dirs[subdir] = {"exclude_folders": exclude_folders_under_subdir}
                 exclude_folders -= set(exclude_folders_under_subdir)
@@ -228,8 +218,3 @@ if args.wait:
         scan_monitor = ScanMonitor(hub, code_location, max_checks=args.max_checks, check_delay=args.check_delay, start_time=start_time, snippet_scan=args.snippet_scan)
         scan_status = scan_monitor.wait_for_scan_completion()
         logging.debug(f"Code location {code_location} finished with status = {scan_status}")
-
-
-
-
-
