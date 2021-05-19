@@ -1,0 +1,6 @@
+{
+   "baseurl": "https://ec2-3-7-143-107.ap-south-1.compute.amazonaws.com",
+   "api_token": "ZjhiOWY3NjEtNjRlYS00NWU0LTg4NzktYjQxMTA4YTVjMWUxOjk3ZGNkYzBhLTBmMTgtNDYxNS1hY2FkLWNiZDhhOTQyNDU4Ng==",
+   "insecure": true,
+   "debug": false
+}
