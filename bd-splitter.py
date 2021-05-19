@@ -16,7 +16,7 @@ from blackduck.HubRestApi import HubInstance, object_id
 
 from wait_for_scan_results import ScanMonitor
 
-SYNOPSYS_DETECT_PATH=os.environ.get("SYNOPSYS_DETECT_PATH", "./synopsys-detect-6.5.0.jar")
+SYNOPSYS_DETECT_PATH=os.environ.get("SYNOPSYS_DETECT_PATH", "./synopsys-detect-7.0.0.jar")
 DETECT_CMD=f"java -jar {SYNOPSYS_DETECT_PATH}"
 FIVE_GB = 5 * 1024 * 1024 * 1024
 
@@ -93,7 +93,7 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=follo
     for name in files:
         try:
             size += getsize(root_path / name)
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError) as e:
             continue
             
     if size > args.size_limit:
@@ -192,7 +192,7 @@ for scan_dir, scan_dir_options in scan_dirs.items():
         # TODO: Function to adjust the path information used in the detect exclusion option given the
         #   source.path (aka scan_dir) and the exclude_folders
         exclusion_name_patterns = ",".join([f"/{f}/" for f in exclude_folders])
-        command = f"{command} --detect.blackduck.signature.scanner.exclusion.patterns={exclusion_name_patterns}"
+        command = f"{command} --detect.excluded.directories={exclusion_name_patterns}"
 
     logging.debug(f"Running Synopsys detect on {scan_dir} using scan/code location name = {code_location}")
     logging.debug(f"command: {command}")
