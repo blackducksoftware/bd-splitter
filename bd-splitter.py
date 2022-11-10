@@ -16,7 +16,7 @@ from blackduck.HubRestApi import HubInstance, object_id
 
 from wait_for_scan_results import ScanMonitor
 
-SYNOPSYS_DETECT_PATH=os.environ.get("SYNOPSYS_DETECT_PATH", "./synopsys-detect-7.0.0.jar")
+SYNOPSYS_DETECT_PATH=os.environ.get("SYNOPSYS_DETECT_PATH", "./synopsys-detect-8.2.0.jar")
 DETECT_CMD=f"java -jar {SYNOPSYS_DETECT_PATH}"
 FIVE_GB = 5 * 1024 * 1024 * 1024
 
