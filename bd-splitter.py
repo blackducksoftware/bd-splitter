@@ -186,7 +186,7 @@ while code_locations_count > 0:
 #
 # Run Synopsys Detect and collect the results
 #
-base_command = f"{DETECT_CMD} --blackduck.url={args.bd_url} --blackduck.api.token={args.api_token} --blackduck.trust.cert=true --detect.parallel.processors=-1 --detect.project.name={args.project} --detect.project.version.name={args.version}"
+base_command = f"{DETECT_CMD} --blackduck.url={args.bd_url} --blackduck.api.token={args.api_token} --blackduck.trust.cert=true --detect.parallel.processors=-1 --detect.project.name=\"{args.project}\" --detect.project.version.name={args.version}"
 base_command = f"{base_command} {' '.join(additional_detect_properties)}"
 logging.debug(f"base command: {base_command}")
 
