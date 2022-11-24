@@ -197,7 +197,7 @@ for scan_dir, scan_dir_options in scan_dirs.items():
     exclude_folders = scan_dir_options['exclude_folders']
     exclude_folders = [e.relative_to(scan_dir) for e in exclude_folders]
     code_location = f"{args.project}-{args.version}-{scan_dir}".replace("/", "-").replace("\\", "-")
-    command = f"{base_command} --detect.source.path={scan_dir} --detect.code.location.name={code_location}"
+    command = f"{base_command} --detect.source.path=\"{scan_dir}\" --detect.code.location.name=\"{code_location}\""
     if exclude_folders:
         # TODO: Is this the correct detect / signature scan option to use to exclude the folders?
         # TODO: Function to adjust the path information used in the detect exclusion option given the
