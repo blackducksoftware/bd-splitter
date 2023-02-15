@@ -28,7 +28,7 @@ This repository provides a python-based example that will split the targeted fol
 3. Then run bd-splitter.py 
 
    ```
-   python3 bd-splitter.py https://bd-server-fqdn api-token project-name version-name target-dir
+   python3 bd-splitter.py --bd_url <https://bd-server-fqdn> --api_token <api-token> --project <project-name> --version <version-name> --target_dir <target-dir>
    ```
 
 # Release Log
