@@ -16,24 +16,30 @@ from blackduck.HubRestApi import HubInstance, object_id
 
 from wait_for_scan_results import ScanMonitor
 
-SYNOPSYS_DETECT_PATH=os.environ.get("SYNOPSYS_DETECT_PATH", "./synopsys-detect-8.2.0.jar")
-DETECT_CMD=f"java -jar {SYNOPSYS_DETECT_PATH}"
+SYNOPSYS_DETECT_PATH = os.environ.get("SYNOPSYS_DETECT_PATH", "./synopsys-detect-8.2.0.jar")
+DETECT_CMD = f"java -jar {SYNOPSYS_DETECT_PATH}"
 FIVE_GB = 5 * 1024 * 1024 * 1024
 
 parser = argparse.ArgumentParser("Analyze a given folder and generate one or more Synopsys Detect commands to perform SCA on the folder's contents")
-parser.add_argument("bd_url", help="The Black Duck server URL, e.g. https://domain-name")
-parser.add_argument("api_token", help="The Black Duck user API token")
-parser.add_argument("project", help="The project name to map all the scans to")
-parser.add_argument("version", help="The version name to map all the scans to")
-parser.add_argument("target_dir")
+parser.add_argument("--bd_url", help="The Black Duck server URL, e.g. https://domain-name")
+parser.add_argument("--api_token", help="The Black Duck user API token")
+parser.add_argument("--project", help="The project name to map all the scans to")
+parser.add_argument("--version", help="The version name to map all the scans to")
+parser.add_argument("--target_dir")
 parser.add_argument("-e", "--exclude_directory", action='append', help="Add a directory to the exclude list.")
 parser.add_argument("-dfs", "--dont_follow_symlinks", action='store_true')
 parser.add_argument("-l", "--logging_dir", help="Set the directory where Detect log files will be captured (default: current working directory)")
-parser.add_argument("-s", "--size_limit", default=FIVE_GB, type=int, help="Set the size limit at which (signature) scans should be split (default: 5 GB)")
+parser.add_argument("-s", "--size_limit", default=FIVE_GB, type=int,
+                    help="Set the size limit at which (signature) scans should be split (default: 5 GB)")
 parser.add_argument("-w", "--wait", action='store_true', help="Wait for all the scan processing to complete")
-parser.add_argument("-c", "--max_checks", default=240, type=int, help="When waiting for scan processing how many times to check before timing out (default: 240 for 20 minutes)")
-parser.add_argument("-d", "--check_delay", default=5, type=int, help="When waiting for scan processing how long to wait before checking again (default: 5 seconds)")
-parser.add_argument("-sn", "--snippet_scan", action='store_true', help="When waiting for scan processing does the scan include snippet scanning?  Note you still need to specify the Detect Properties to enable snippet scanning (default: False)")
+parser.add_argument(
+    "-c", "--max_checks", default=240, type=int,
+    help="When waiting for scan processing how many times to check before timing out (default: 240 for 20 minutes)")
+parser.add_argument("-d", "--check_delay", default=5, type=int,
+                    help="When waiting for scan processing how long to wait before checking again (default: 5 seconds)")
+parser.add_argument(
+    "-sn", "--snippet_scan", action='store_true',
+    help="When waiting for scan processing does the scan include snippet scanning?  Note you still need to specify the Detect Properties to enable snippet scanning (default: False)")
 parser.add_argument("-p", "--detect_properties", help="Provide list of (additional) detect properties (one per line) in the specified file")
 args = parser.parse_args()
 
@@ -41,6 +47,8 @@ logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s', stream=sys.s
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
+
+# pylint: disable=logging-fstring-interpolation
 if args.detect_properties:
     logging.debug(f"Reading additional detect properties from {args.detect_properties}")
     with open(args.detect_properties, 'r') as detect_properties_f:
@@ -61,6 +69,7 @@ logging.debug(f"Excluding the following directory names/patterns: {exclude_list}
 directories = {}
 scan_dirs = {}
 
+
 def in_exclude_list(abs_path):
     return any([abs_path.match(e) for e in exclude_list])
 
@@ -69,7 +78,7 @@ def in_exclude_list(abs_path):
 # Analyze the folder tree from the bottom up
 #
 # If a folder exceeds the size limit, split it up by adding its sub-folders
-# to the scan list. 
+# to the scan list.
 # Add the folder itself to the list, but exclude its sub-folders
 #
 
@@ -95,12 +104,13 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=follo
             size += getsize(root_path / name)
         except (FileNotFoundError, OSError) as e:
             continue
-            
+
     if size > args.size_limit:
-        logging.error(f"This folder - {root} - has files totalling {size} bytes which is greater than the limit of {args.size_limit}. We cannot split this folder any further and therefore cannot scan it. Exiting...")
+        logging.error(
+            f"This folder - {root} - has files totalling {size} bytes which is greater than the limit of {args.size_limit}. We cannot split this folder any further and therefore cannot scan it. Exiting...")
         sys.exit(1)
 
-    subdir_paths = [ root_path / d for d in subdirs]
+    subdir_paths = [root_path / d for d in subdirs]
     logging.debug(f"subdir_paths: {subdir_paths}")
 
     subdir_size = sum(directories.get(p, 0) for p in subdir_paths)
@@ -130,7 +140,8 @@ for root, subdirs, files in os.walk(target_dir, topdown=False, followlinks=follo
 if no_splits:
     # This means all of the directories analyzed fit within the given size limit
     # In this case we setup to run a Detect scan on the originally supplied target directory
-    logging.debug(f"All of the folders within {target_dir} fit under the size limit of {args.size_limit} so adding {target_dir} to the scan directory list")
+    logging.debug(
+        f"All of the folders within {target_dir} fit under the size limit of {args.size_limit} so adding {target_dir} to the scan directory list")
     scan_dirs[target_dir] = {"exclude_folders": exclude_folders}
 
 logging.debug(f"scan_dirs: {scan_dirs}")
@@ -141,7 +152,7 @@ hub_instance_kwargs = {
     "debug": False
 }
 
-hub = HubInstance(args.bd_url, **hub_instance_kwargs) # Need a HubInstance to use the BD REST API
+hub = HubInstance(args.bd_url, **hub_instance_kwargs)  # Need a HubInstance to use the BD REST API
 
 #
 # To ensure accurate results, un-map any scans that were previously mapped to the project-version
@@ -167,15 +178,15 @@ while code_locations_count > 0:
             code_location_after = hub.execute_get(code_location['_meta']['href'])
         else:
             logging.warning(f"Failed to unmap code location {code_location['name']}, status code was {response.status_code}")
-    
+
     if code_locations_count < 10:
         code_locations_count = 0
-    
+
 
 #
 # Run Synopsys Detect and collect the results
 #
-base_command = f"{DETECT_CMD} --blackduck.url={args.bd_url} --blackduck.api.token={args.api_token} --blackduck.trust.cert=true --detect.parallel.processors=-1 --detect.project.name={args.project} --detect.project.version.name={args.version}"
+base_command = f"{DETECT_CMD} --blackduck.url={args.bd_url} --blackduck.api.token={args.api_token} --blackduck.trust.cert=true --detect.parallel.processors=-1 --detect.project.name=\"{args.project}\" --detect.project.version.name={args.version}"
 base_command = f"{base_command} {' '.join(additional_detect_properties)}"
 logging.debug(f"base command: {base_command}")
 
@@ -186,7 +197,7 @@ for scan_dir, scan_dir_options in scan_dirs.items():
     exclude_folders = scan_dir_options['exclude_folders']
     exclude_folders = [e.relative_to(scan_dir) for e in exclude_folders]
     code_location = f"{args.project}-{args.version}-{scan_dir}".replace("/", "-").replace("\\", "-")
-    command = f"{base_command} --detect.source.path={scan_dir} --detect.code.location.name={code_location}"
+    command = f"{base_command} --detect.source.path=\"{scan_dir}\" --detect.code.location.name=\"{code_location}\""
     if exclude_folders:
         # TODO: Is this the correct detect / signature scan option to use to exclude the folders?
         # TODO: Function to adjust the path information used in the detect exclusion option given the
@@ -210,11 +221,13 @@ for scan_dir, scan_dir_options in scan_dirs.items():
         logging.debug(f"Detect on code location {code_location} succeeded")
         code_locations_to_wait_for.append(code_location)
     else:
-        logging.error(f"Detect failed with return code {process.returncode} on code location {code_location}. Look at detect log {detect_log} for more information.")
+        logging.error(
+            f"Detect failed with return code {process.returncode} on code location {code_location}. Look at detect log {detect_log} for more information.")
 
 if args.wait:
     for code_location in code_locations_to_wait_for:
         logging.debug(f"Waiting for code location {code_location} to finish processing using start_time {start_time}")
-        scan_monitor = ScanMonitor(hub, code_location, max_checks=args.max_checks, check_delay=args.check_delay, start_time=start_time, snippet_scan=args.snippet_scan)
+        scan_monitor = ScanMonitor(hub, code_location, max_checks=args.max_checks, check_delay=args.check_delay,
+                                   start_time=start_time, snippet_scan=args.snippet_scan)
         scan_status = scan_monitor.wait_for_scan_completion()
         logging.debug(f"Code location {code_location} finished with status = {scan_status}")
