@@ -1,0 +1,6 @@
+{
+   "baseurl": "https://bd.example.com",
+   "api_token": "<PUT-YOUR-TOKEN-HERE-NEVER-COMMIT-REAL-ONE>",
+   "insecure": true,
+   "debug": false
+}
